@@ -1,4 +1,5 @@
 import numpy as np
+import util
 
 
 class Grain:
@@ -21,23 +22,38 @@ class Grid:
 class Polycrystal:
 
     def __init__(self, config):
-        
+
         self.config = config
-        # self.shift = np.array([0.5, 0.5, 0.5])  # ?????
+        self.shift = np.array([0.5, 0.5, 0.5])  # ?????
         self.grains = []
         return
 
-    def initialize_grain_centers(self):
-        
-        # The hell is this doing?
-        for i in range(self.grains):
-            center = self.shift*(np.random.rand(3)*2 - 1)
-            angle = 2*np.pi*np.random.rand(3)
-            rotv = np.array([np.sin(angle[1])/np.cos(angle[0]),
-                             np.sin(angle[1])/np.sin(angle[0]),
-                             1/np.cos(angle[1])
-            self.grains.append(Grain(center,
-                                     
+    def initialize_grain_centers(self, seed):
 
+        # for _ in range(self.grains):
+        #     grain_center = self.shift*(np.random.rand(3)*2 - 1)
+        #     euler_angles = 2*np.pi*np.random.rand(3)
+        #     rotation_axis = np.array([np.sin(euler_angles[1])/np.cos(euler_angles[0]),
+        #                               np.sin(euler_angles[1])/np.sin(euler_angles[0]),
+        #                               1/np.cos(euler_angles[1])])
+
+        #     self.grains.append(Grain(center=grain_center,
+        #                              rotvt=util.rotate_rodrigues(-grain_center, rotation_axis, -euler_angles[2]),
+        #                              angle=euler_angles))
+
+        self.grain_centers = self.shift*(np.random.rand(self.n_grains, 3)*2 - 1)
+        self.euler_angles = 2*np.pi*np.random.rand(self.n_grains, 3)
+        self.rotation_axes = np.array([np.sin(self.euler_angles[:, 1])/np.cos(self.euler_angles[:, 0]),
+                                       np.sin(self.euler_angles[:, 1])/np.sin(self.euler_angles[:, 0]),
+                                       1/np.cos(self.euler_angles[:, 1])])
+        self.rotvt = util.rotate_rodrigues(-self.grain_centers, self.rotation_axes, -self.euler_angles[:, 2])
 
         return
+
+    def lattice(self):
+        N = (self.atoms_grain/self.unit_cell.cols())**1/3
+        return
+
+
+    def write_grain_orientation_vtk(self, fname):
+        with open(fname, 'w') as f:
