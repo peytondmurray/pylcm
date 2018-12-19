@@ -22,13 +22,14 @@ def main():
         data.rotate_box(i)
         data.voronoi(i)
 
-    config.convolution()
-    config.sort_grig()
-    config.check_distance()
+    # config.convolution()
+    # config.sort_grig()
+    # config.check_distance()
 
-    write_lammps(config)
+    # write_lammps(config)
 
 
 if __name__ == "__main__":
     config = config.Config()
     print('done!')
+    

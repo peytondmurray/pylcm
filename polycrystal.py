@@ -1,6 +1,6 @@
 import numpy as np
 import util
-
+import pyevtk.hl as pyevtkhl
 
 class Grain:
 
@@ -28,7 +28,7 @@ class Polycrystal:
         self.grains = []
         return
 
-    def initialize_grain_centers(self, seed):
+    def initialize_grain_centers(self, seed=123):
 
         # for _ in range(self.grains):
         #     grain_center = self.shift*(np.random.rand(3)*2 - 1)
@@ -41,8 +41,9 @@ class Polycrystal:
         #                              rotvt=util.rotate_rodrigues(-grain_center, rotation_axis, -euler_angles[2]),
         #                              angle=euler_angles))
 
-        self.grain_centers = self.shift*(np.random.rand(self.n_grains, 3)*2 - 1)
-        self.euler_angles = 2*np.pi*np.random.rand(self.n_grains, 3)
+        np.random.seed(seed=seed)
+        self.grain_centers = self.shift*(np.random.rand(self.config.grains, 3)*2 - 1)
+        self.euler_angles = 2*np.pi*np.random.rand(self.config.grains, 3)
         self.rotation_axes = np.array([np.sin(self.euler_angles[:, 1])/np.cos(self.euler_angles[:, 0]),
                                        np.sin(self.euler_angles[:, 1])/np.sin(self.euler_angles[:, 0]),
                                        1/np.cos(self.euler_angles[:, 1])])
@@ -54,6 +55,10 @@ class Polycrystal:
         N = (self.atoms_grain/self.unit_cell.cols())**1/3
         return
 
-
     def write_grain_orientation_vtk(self, fname):
-        with open(fname, 'w') as f:
+        pyevtkhl.pointsToVTK(fname,
+                             self.grain_centers[:, 0],
+                             self.grain_centers[:, 1],
+                             self.grain_centers[:, 2],
+                             data={'rotvt': self.rotvt})
+        return
