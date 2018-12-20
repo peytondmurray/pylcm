@@ -17,7 +17,7 @@ def main():
     data.initialize_grain_centers()
 
     for i in range(config.grains):
-        data.lattice(i)
+        data.generate_lattice(i)
         # data.rotate_box(i)
         # data.voronoi(i)
 

@@ -41,7 +41,8 @@ class Polycrystal:
         #                              rotvt=util.rotate_rodrigues(-grain_center, rotation_axis, -euler_angles[2]),
         #                              angle=euler_angles))
 
-        self.config.grains = 25
+        self.config.grains = 25  # REMOVE AFTER TESTING
+
         np.random.seed(seed=seed)
         self.grain_centers = self.shift*(np.random.rand(self.config.grains, 3)*2 - 1)
         self.euler_angles = 2*np.pi*np.random.rand(self.config.grains, 3)
@@ -53,20 +54,24 @@ class Polycrystal:
 
         return
 
-    def generate_lattice(self):
+    def generate_lattice(self, ig):
 
-        # N = (self.atoms_grain/self.unit_cell.cols())**1/3
+        n_unit_cells = (self.config.size/self.config.lattice_constants).astype(int)
+        n_possible_atoms = np.prod(n_unit_cells)*self.config.basis.shape[0]
+        lattice = np.zeros((n_possible_atoms, 3))
 
-        # current_grain = np.zeros((N**3, 3))
-        atom_index = 0
+        ia = 0  # Atom count
 
-        for i in range(int(self.config.size[0]/self.config.lattice_constants[0])):
-            for j in range(int(self.config.size[1]/self.config.lattice_constants[1])):
-                for k in range(int(self.config.size[2]/self.config.lattice_constants[2])):
-                    
+        # for i in range(n_unit_cells[0]):
+        #     for j in range(n_unit_cells[1]):
+        #         for k in range(n_unit_cells[2]):
+        #             for vec in self.config.basis:
+        #                 lattice[ia] = np.array([i, j, k])*self.config.lattice_constants + vec
 
 
-        return
+
+
+        return voronoi_decimate(lattice, self.grain_centers)
 
     def write_grain_orientation_vtk(self, fname):
         print(f'Writing grain orientations: {fname}')
