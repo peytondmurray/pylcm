@@ -1,8 +1,8 @@
 import argparse
-import numpy as  np
+import numpy as np
 
 
-class Config:
+class PolyConfig:
 
     def __init__(self):
 
@@ -10,9 +10,9 @@ class Config:
 
         self.volume = arguments.volume
         self.grains = arguments.grains
-        self.a = arguments.a
-        self.b = arguments.b
-        self.c = arguments.c
+        self.lattice_constants = np.ndarray([arguments.a, arguments.b, arguments.c])
+        self.basis = None
+        self.extent = None
         self.type = arguments.type
         self.out = arguments.out
         self.input = arguments.input
