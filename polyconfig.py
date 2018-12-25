@@ -10,8 +10,12 @@ class PolyConfig:
 
         self.volume = arguments.volume
         self.grains = arguments.grains
-        self.lattice_constants = np.ndarray([arguments.a, arguments.b, arguments.c])
-        self.basis = None
+        # self.lattice_constants = np.ndarray([arguments.a, arguments.b, arguments.c])
+
+        self.lattice_vectors = np.empty((3, 3))     # Lattice vectors in cartesian coordinate system
+        # self.orientation = np.empty((3, 3))
+        self.basis = dict()                         # Basis of the crystal structure
+
         self.extent = None
         self.type = arguments.type
         self.out = arguments.out
