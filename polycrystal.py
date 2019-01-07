@@ -1,9 +1,9 @@
 import numpy as np
+import pandas as pd
 import util
 import pyevtk.hl as pyevtkhl
 
 
-# TODO Flesh out the rest of Lattice dunders
 class Lattice:
 
     def __init__(self, lattice=None, elements=None, n_atoms=None):
@@ -38,19 +38,16 @@ class Lattice:
         if isinstance(item, Lattice):
             return self.add_lattice(item)
         elif isinstance(item, tuple) or isinstance(item, list):
-            return self.add_arrays(item)
+            return self.add_arrays(item[0], item[1])
 
     def add_lattice(self, other):
         return Lattice(np.vstack((self.lattice, other.lattice)), np.vstack((self.elements, other.elements)))
 
-    def add_arrays(self, item):
-        return Lattice(np.vstack((self.lattice, item[0])), np.vstack((self.elements + item[1])))
+    def add_arrays(self, lattice, elements):
+        return Lattice(np.vstack((self.lattice, lattice)), np.vstack((self.elements + elements)))
 
     def __len__(self):
         return self.size()
-
-    def __iter__(self):
-        pass
 
     def __hash__(self):
         pass
@@ -76,18 +73,37 @@ class Lattice:
         else:
             raise ValueError('Lattice can only __matmul__ with an numpy.ndarray')
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        g = ((vec, el) for vec, el in zip(self.lattice, self.elements))
+        yield from g
+
+
+class Grain:
+
+    def __init__(self, center, lattice_vectors, basis, axis, angle=0):
+        self.center = center
+        self.lattice_vectors = lattice_vectors
+        self.basis = basis
+        self.axis = axis
+        self.angle = angle
+        self.rotated_basis = {el: util.rotate_rodrigues(vec, self.axis, self.angle) for el, vec in self.basis.items()}
+        self.rotated_lattice_vectors = util.rotate_rodrigues(self.lattice_vectors, self.axis, self.angle)
+        return
+
 
 class Polycrystal:
 
     def __init__(self, config):
 
         self.config = config
-        self.shift = np.array([0.5, 0.5, 0.5])  # ?????
-        self.grains = []
         self.lattice = None
+        self.grains = []
         return
 
-    def initialize_grain_centers(self, seed=123):
+    def initialize_grain_centers(self, seed=123, randomize_basis=True):
         """Generate random grain centers. self.grain_centers will be set to an np.ndarray of shape
         (self.config.grains, 3), with each row containing the x, y, z coordinates of each grain center.
 
@@ -98,56 +114,59 @@ class Polycrystal:
 
         """
 
-        self.config.grains = 25  # REMOVE AFTER TESTING
-
         np.random.seed(seed=seed)
-        self.grain_centers = np.random.rand(self.config.grains, 3)
+        grain_centers = np.random.rand(self.config.ngrains, 3)*self.config.size
+        grain_vectors = util.generate_random_vectors(self.config.ngrains)
+        grain_angles = np.random.rand(self.config.ngrains, 1)*2*np.pi
+
+        for i in range(self.config.ngrains):
+            self.grains.append(Grain(grain_centers[i],
+                                     self.config.lattice_vectors,
+                                     self.config.basis,
+                                     grain_vectors[i],
+                                     grain_angles[i]))
 
         return
 
-    def generate_lattice(self, ig: int, basis: dict):
-        """Generate a lattice centered on self.grain_centers[ig], using the given basis vectors.
+    def generate_lattice(self, ig: int):
+        """Generate a lattice centered on self.grain_centers[ig], using the grain_bases generated before.
 
         Parameters
         ----------
         ig : int
             grain index
-        basis : dict
-            Dict of the form {element: 3-tuple}. Contains the element names of the atoms located at the (x, y, z)
-            locations given in the respective 3-tuples.
 
         """
 
-        relative_loc = self.grain_centers[ig]/self.config.size          # Relative location in sim box [0, 1]
+        relative_loc = self.grains[ig].center/self.config.size          # Relative location in sim box [0, 1]
 
         # Number of unit cells span simulation box
-        n_uc_span = util.n_uc_fill(self.config.size, self.config.lattice_vectors, kind='project')
+        n_uc_span = util.n_uc_fill(self.config.size,
+                                   self.grains[ig].rotated_lattice_vectors,
+                                   kind='project')
         n_uc = (relative_loc*n_uc_span).astype(int)                     # Location of grain in number of unit cells
 
-        _lattice = np.empty((n_uc_span*basis.shape[0], 3), dtype=float)
-        _elements = np.empty((n_uc_span*basis.shape[0], 1), dtype=str)
-
-        _lattice = Lattice(shape=)
+        _lattice = Lattice(n_atoms=np.prod(n_uc_span)*len(self.grains[ig].basis))
 
         ia = 0  # Atom count
         for i in range(-n_uc[0], n_uc_span[0] - n_uc[0]):
             for j in range(-n_uc[1], n_uc_span[1] - n_uc[1]):
                 for k in range(-n_uc[2], n_uc_span[2] - n_uc[2]):
-                    for el, vec in basis.items():
-                        _lattice[ia] = self.grain_centers[ig] + np.array([i, j, k])*self.config.lattice_constants + vec
-                        _elements[ia] = el
+                    for el, vec in self.grains[ig].basis.items():
+                        _lattice[ia] = (self.grains[ig].center+np.array([i, j, k])*self.grains[ig].lattice_vectors+vec,
+                                        el)
                         ia += 1
 
-        _lattice, _elements = self.voronoi_decimate(self.grains, _lattice, _elements)
+        _lattice = self._voronoi_decimate(ig, _lattice)
 
         if self.lattice is not None:
-            self.lattice = self.lattice + Lattice(_lattice, _elements)
+            self.lattice = self.lattice + _lattice
         else:
-            self.lattice = Lattice(_lattice, _elements)
+            self.lattice = _lattice
 
         return
 
-    def voronoi_decimate(self, ig: int, lattice: Lattice) -> Lattice:
+    def _voronoi_decimate(self, ig: int, lattice: Lattice) -> Lattice:
         """Given a grain index and input Lattice instance, this function checks which atoms in the lattice
         actually belong to the grain centered at self.grain_centers[ig]. It does this by voronoi tesselation; any
         atoms which are closer to a grain center other than self.grain_centers[ig] are not returned.
@@ -167,15 +186,13 @@ class Polycrystal:
 
         """
 
+        valid_lattice = Lattice()
 
-        vvalid_lattice = Lattice()
+        for i in range(lattice.size()):
+            if self.nearest_grain(lattice[i][0]) == ig:
+                valid_lattice.add_arrays(*lattice[i])
 
-        for i in range(lattice.shape[0]):
-            if self.nearest_grain(lattice[i]) == ig:
-                valid_lattice += [lattice[i]]
-                valid_elements += [elements[i]]
-
-        return np.array(valid_lattice), np.array(valid_elements)
+        return valid_lattice
 
     def nearest_grain(self, vec: np.ndarray) -> int:
         """Find the index of the grain center nearest to vec.
@@ -191,29 +208,45 @@ class Polycrystal:
             Index of grain center nearest to vec.
         """
 
-        return np.argmin(np.sum(np.square(self.grain_centers - vec), axis=1))
+        return np.argmin(np.sum(np.square(self.get_grain_centers() - vec), axis=1))
 
-    def write_grain_orientation_vtk(self, fname):
-        print(f'Writing grain orientations: {fname}')
-        # pyevtkhl.pointsToVTK(fname,
-        #                      self.grain_centers[:, 0],
-        #                      self.grain_centers[:, 1],
-        #                      self.grain_centers[:, 2],
-        #                      data={'rotvt': self.rotvt})
+    def get_grain_centers(self):
+        c = np.empty((self.config.ngrains, 3))
+        for i in range(self.config.ngrains):
+            c[i] = self.grains[i].center
+        return c
 
-        with open(fname, 'w') as f:
-            f.write('# vtk DataFile Version 2.0\n')
-            f.write('\n')
-            f.write('ASCII\n')
-            f.write('DATASET UNSTRUCTURED_GRID\n')
-            f.write(f'POINTS {self.config.grains} float\n')
-            for loc in self.grain_centers:
-                f.write(f'{loc[0]} {loc[1]} {loc[2]}\n')
-            f.write(f'POINT_DATA {self.config.grains}\n')
-            f.write('VECTORS grain_orientations float\n')
-            for vec in self.rotvt:
-                f.write(f'{vec[0]} {vec[1]} {vec[2]}\n')
+    def get_grain_axes(self):
+        a = np.empty((self.config.ngrains, 3))
+        for i in range(self.config.ngrains):
+            a[i] = self.grains[i].axes
+        return a
 
-        print('Finished writing grain orientations.')
+    def get_grain_angles(self):
+        a = np.empty((self.config.ngrains, 3))
+        for i in range(self.config.ngrains):
+            a[i] = self.grains[i].angle
+        return a
 
+
+    def __repr__(self):
+        print(str(self))
         return
+
+    def __str__(self):
+        df = pd.DataFrame(data=np.hstack((self.get_grain_centers(), self.get_grain_axes(), self.get_grain_angles())),
+                          columns=['grain_x', 'grain_y', 'grain_z', 'axis_x', 'axis_y', 'axis_z', 'angle'])
+
+        config_str = '\n\t'.join(str(self.config).split('\n'))
+
+        ret = 'Polycrystal()\n'
+        ret += f'\n\t{config_str}\n\n'
+        ret += 'Grains:\n'
+        ret += str(df)+'\n\n'
+        ret += 'Grain Bases:\n'
+        for i in range(self.config.ngrains):
+            ret += f'{i}\n'
+            for el, vec in self.grains[i].basis:
+                ret += f'\t{el}\t{vec}\n'
+
+        return ret

@@ -1,30 +1,44 @@
 import argparse
+import json
 import numpy as np
 
 
 class PolyConfig:
 
-    def __init__(self):
+    def __init__(self, **kwargs):
 
         arguments = Parser().parse_args()
 
-        self.volume = arguments.volume
-        self.grains = arguments.grains
-        # self.lattice_constants = np.ndarray([arguments.a, arguments.b, arguments.c])
+        if arguments.file is None:
+            raise NotImplementedError
+        else:
+            with open(arguments.file, 'r') as f:
+                file_args = json.load(f)
 
-        self.lattice_vectors = np.empty((3, 3))     # Lattice vectors in cartesian coordinate system
-        # self.orientation = np.empty((3, 3))
-        self.basis = dict()                         # Basis of the crystal structure
-
-        self.extent = None
-        self.type = arguments.type
-        self.out = arguments.out
-        self.input = arguments.input
-        self.element = arguments.element
-        self.init = arguments.init
-        self.dimension = arguments.dimension
-
+            self.ngrains = file_args['grains']
+            self.lattice_vectors = np.array(file_args['lattice_vectors'])
+            self.basis = {el: np.array(vec) for el, vec in file_args['basis'].items()}
+            self.size = np.array(file_args['size'])
+            self.out = file_args['output_filename']
+            self.dimension = file_args['dimension']
         return
+
+    def __repr__(self):
+        print(str(self))
+        return
+
+    def __str__(self):
+        ret = 'PolyConfig()\n'
+        ret += f'\tGrains: {self.ngrains}\n'
+        ret += f'\tDimension: {self.dimension}\n'
+        ret += f'\tSize: {self.size}\n'
+        ret += '\tBasis:\n'
+        for el, vec in self.basis.items():
+            ret += f'\t\t{el}:\t{vec}\n'
+        ret += '\tLattice Vectors:\n'
+        for vec in self.lattice_vectors:
+            ret += f'\t\t{vec}\n'
+        return ret
 
 
 class Parser(argparse.ArgumentParser):
@@ -108,5 +122,12 @@ class Parser(argparse.ArgumentParser):
                           dest='dimension',
                           default=3,
                           help='Dimension')
+        self.add_argument('-f', '--file',
+                          type=str,
+                          required=False,
+                          metavar='FILE',
+                          dest='file',
+                          default='default.json',
+                          help='Config file')
 
         return

@@ -1,7 +1,7 @@
 import numpy as np
 import numba as nb
 
-@nb.jit
+
 def rotate_rodrigues(vector: np.ndarray, axis: np.ndarray, angle: np.ndarray) -> np.ndarray:
     """Rotate a vector around an axis by the specified angle. See wikipedia entry for description.
 
@@ -11,7 +11,7 @@ def rotate_rodrigues(vector: np.ndarray, axis: np.ndarray, angle: np.ndarray) ->
         Vector to rotate. If Nx3 element array is specified, each row is considered a separate vector.
     axis : np.ndarray
         Axis of rotation
-    angle : np.ndarray
+    angle : np.ndarray or float
         Angle of rotation
 
     Returns
@@ -20,18 +20,22 @@ def rotate_rodrigues(vector: np.ndarray, axis: np.ndarray, angle: np.ndarray) ->
         Rotated vector
     """
 
-    if len(angle.shape) == 1:
-        angle = angle.reshape((-1, 1))
-    elif len(angle.shape) > 2:
-        raise ValueError('Invalid shape for input angle.')
+    # If given a 2d input vector, return a 2d vector. If given a 1d input vector, return a 1d vector.
+    if len(vector.shape) == 2:
+        return _rotate_rodrigues(vector, axis, angle)
+    elif len(vector.shape) == 1:
+        return _rotate_rodrigues(np.atleast_2d(vector), axis, angle)[0]
+
+
+def _rotate_rodrigues(vector, axis, angle):
+    axis = axis.reshape(3)  # Ensure axis is 1D to make it broadcast correctly across vector, which is 2D
 
     # Calculates the dot product of each row, and stores the result in a column vector
-    row_wise_dot_product = np.einsum('ij,ij->i', axis, vector).reshape((-1, 1))
-
+    row_wise_dot_product = np.sum(vector*axis, axis=1).reshape((-1, 1))
     return vector*np.cos(angle) + np.cross(axis, vector)*np.sin(angle) + (1-np.cos(angle))*axis*row_wise_dot_product
 
 
-@nb.jit
+@nb.jit(nopython=True)
 def spherical_to_cartesian(rpt: np.ndarray) -> np.ndarray:
     """Transform spherical r, phi, theta coordinates to cartesian x, y, z coordinates.
 
@@ -46,12 +50,16 @@ def spherical_to_cartesian(rpt: np.ndarray) -> np.ndarray:
         [description]
     """
 
-    return np.ndarray([rpt[:, 0]*np.sin(rpt[:, 2])*np.cos(rpt[:, 1]),
-                       rpt[:, 0]*np.sin(rpt[:, 2])*np.sin(rpt[:, 1]),
-                       rpt[:, 0]*np.cos(rpt[:, 2])])
+    ret = np.empty_like(rpt)
+
+    ret[:, 0] = rpt[:, 0]*np.sin(rpt[:, 2])*np.cos(rpt[:, 1])   # x
+    ret[:, 1] = rpt[:, 0]*np.sin(rpt[:, 2])*np.sin(rpt[:, 1])   # y
+    ret[:, 2] = rpt[:, 0]*np.cos(rpt[:, 2])                     # z
+
+    return ret
 
 
-@nb.jit
+@nb.jit(nopython=True)
 def cartesian_to_spherical(xyz: np.ndarray) -> np.ndarray:
     """Transform cartesian x, y, z coordinates to spherical r, phi, theta coordinates.
 
@@ -70,7 +78,7 @@ def cartesian_to_spherical(xyz: np.ndarray) -> np.ndarray:
     return r, np.arctan2(xyz[:, 1], xyz[:, 0]), np.arccos(xyz[:, 2]/r)
 
 
-@nb.jit
+@nb.jit(nopython=True)
 def generate_random_vectors(N: int) -> np.ndarray:
     """Generate randomly oriented unit vectors.
 
@@ -113,7 +121,7 @@ def n_uc_fill(simulation_size: np.ndarray, lattice_vectors: np.ndarray, kind='pr
         n_uc = np.prod(simulation_size)/uc_volume
     elif kind == 'project':
         xyz = np.eye(3)
-        projections_along_xyz = np.sum(np.abs(xyz@lattice_vectors.T, axis=1))
+        projections_along_xyz = np.sum(np.abs(xyz@lattice_vectors.T), axis=1)
         n_uc = simulation_size/projections_along_xyz
 
     return n_uc.astype(int)

@@ -1,0 +1,11 @@
+{
+    "grains": 25,
+    "lattice_vectors": [[4.2e-10, 0, 0], [0, 4.2e-10, 0], [0, 0, 4.2e-10]],
+    "basis": {
+        "Ni": [0, 0, 0],
+        "O": [0.5, 0.5, 0.5]
+    },
+    "size": [10e-9, 10e-9, 10e-9],
+    "output_filename": "out.txt",
+    "dimension": 3
+}
