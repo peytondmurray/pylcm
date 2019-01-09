@@ -101,15 +101,20 @@ def generate_random_vectors(N: int) -> np.ndarray:
     return spherical_to_cartesian(rpt)
 
 
-def n_uc_fill(simulation_size: np.ndarray, lattice_vectors: np.ndarray, kind='project') -> np.ndarray:
+def n_uc_fill(vecs: np.ndarray, size: np.ndarray, kind='project') -> np.ndarray:
     """Given a set of lattice vectors, estimate the number of unit cells needed to fill a box of size simulation_size.
 
     Parameters
     ----------
-    simulation_size : np.ndarray
-        Array containing the size of the simulation region, (size_x, size_y, size_z)
-    lattice_vectors : np.ndarray
+    vecs : np.ndarray
         Array containing three lattice vectors. These define the unit cell of the crystal system.
+    size : np.ndarray
+        Array containing the size of the simulation region, (size_x, size_y, size_z)
+
+    Returns
+    -------
+    np.ndarray
+        Number of unit cells needed to fill the simulation box
 
     """
 
@@ -117,11 +122,36 @@ def n_uc_fill(simulation_size: np.ndarray, lattice_vectors: np.ndarray, kind='pr
     # Calculate the volume of the unit cell, and divide by the simulation size to get the number of unit cells
     # to create.
     if kind == 'volume':
-        uc_volume = lattice_vectors[2, :]@np.cross(lattice_vectors[0, :], lattice_vectors[1, :])
-        n_uc = np.prod(simulation_size)/uc_volume
+        uc_volume = vecs[2, :]@np.cross(vecs[0, :], vecs[1, :])
+        n_uc = np.prod(size)/uc_volume
     elif kind == 'project':
         xyz = np.eye(3)
-        projections_along_xyz = np.sum(np.abs(xyz@lattice_vectors.T), axis=1)
-        n_uc = simulation_size/projections_along_xyz
+        projections_along_xyz = np.sum(np.abs(xyz@vecs.T), axis=1)
+        n_uc = size/projections_along_xyz
 
     return n_uc.astype(int)
+
+
+def fill_locations(center: np.ndarray, vecs: np.ndarray, size: np.ndarray) -> np.ndarray:
+    """Given a set of lattice vectors and a simulation size, find all unit cell locations needed to fill the simulation
+    space.
+
+    Parameters
+    ----------
+    center: np.ndarray
+        3 element array containing a vector to the xyz coordinates of (hkl) = (000)
+    vecs : np.ndarray
+        3x3 element array containing 3 lattice vectors
+
+    Returns
+    -------
+    np.ndarray
+        Array of [i, j, k] 3-tuples corresponding to allowed number of unit cells along each lattice vector needed
+        to fill the simulation region.
+    """
+
+    S = np.vstack((size, size, size))
+    n_uc = np.sum(np.abs(S*vecs), axis=1)   # Project x, y, z along each lattice vector.
+
+    # return n_uc
+    return np.array(np.meshgrid(np.arange(n_uc[0]), np.arange(n_uc[1]), np.arange(n_uc[2]))).T.reshape((-1, 3))
