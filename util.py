@@ -1,5 +1,6 @@
 import numpy as np
 import numba as nb
+import itertools as it
 
 
 def rotate_rodrigues(vector: np.ndarray, axis: np.ndarray, angle: np.ndarray) -> np.ndarray:
@@ -132,26 +133,117 @@ def n_uc_fill(vecs: np.ndarray, size: np.ndarray, kind='project') -> np.ndarray:
     return n_uc.astype(int)
 
 
-def fill_locations(center: np.ndarray, vecs: np.ndarray, size: np.ndarray) -> np.ndarray:
+def fill_locations(vecs: np.ndarray, size: np.ndarray) -> np.ndarray:
     """Given a set of lattice vectors and a simulation size, find all unit cell locations needed to fill the simulation
     space.
 
     Parameters
     ----------
-    center: np.ndarray
-        3 element array containing a vector to the xyz coordinates of (hkl) = (000)
     vecs : np.ndarray
         3x3 element array containing 3 lattice vectors
+    size : np.ndarray
+        3 element array containing the size of the simulation box in along the (x, y, z) axes.
 
     Returns
     -------
     np.ndarray
-        Array of [i, j, k] 3-tuples corresponding to allowed number of unit cells along each lattice vector needed
+        Array of [u, v, w] 3-tuples corresponding to allowed number of unit cells along each lattice vector needed
         to fill the simulation region.
+    """
+    print(size)
+
+    # One liner finds the vertices of the simulation cube
+    corners = np.array(list(it.product(*[[0, s] for s in size])))
+
+    uvw = generate_uvw(vecs, size)                  # Generate lattice sites
+
+    for i in reversed(range(len(corners))):
+        if not within_one_uc(uvw, corners[i]):
+            return fill_locations(vecs, 2*size)
+
+    return uvw
+
+
+@nb.jit(nopython=True)
+def within_one_uc(uvw: np.ndarray, point: np.ndarray) -> bool:
+    """For a given set of lattice vector coefficients, check wether any of the lattice sites fall within 1 unit cell of
+    the given point.
+
+    Parameters
+    ----------
+    uvw : np.ndarray
+        Coefficients of the lattice vectors to check
+    point : np.ndarray
+        Reference point; distance between each lattice point given by uvw and this point is checked. This is a 3
+        element array containing the cartesian coordinates in units of the lattice parameters, i.e. for lattice
+        parameters (a, b, c),
+
+            point = (x/a, y/b, z/c)
+
+    Returns
+    -------
+    bool
+        True if one of the lattice sites is within 1 unit cell of the point, False otherwise.
+    """
+
+    for i in range(uvw.shape[0]):
+        if np.sqrt(np.sum((uvw[i] - point)**2)) < 1:
+            return True
+
+    return False
+
+
+def generate_uvw(vecs: np.ndarray, size: np.ndarray) -> np.ndarray:
+    """Generate (u, v, w) coefficient 3-tuples which fill the simulation space given by size, given an input array
+    of lattice vectors.
+
+    Parameters
+    ----------
+    vecs : np.ndarray
+        3x3 array of lattice vectors (a, b, c), with xyz cartesian components in the following arrangement:
+
+            ax ay az
+            bx by bz
+            cx cy cz
+
+    size : np.ndarray
+        3 element array containing the sizes along the (x, y, z) directions
+
+    Returns
+    -------
+    np.ndarray
+        Mx3 array of lattice site coefficients. The actual lattice sites can be calculated from the product of these
+        coefficients and the lattice vectors; each lattice site is given by
+
+            T = u*a + v*b + w*c
     """
 
     S = np.vstack((size, size, size))
     n_uc = np.sum(np.abs(S*vecs), axis=1)   # Project x, y, z along each lattice vector.
 
-    # return n_uc
     return np.array(np.meshgrid(np.arange(n_uc[0]), np.arange(n_uc[1]), np.arange(n_uc[2]))).T.reshape((-1, 3))
+
+
+def lattice_from_uvw(vecs: np.ndarray, uvw: np.ndarray) -> np.ndarray:
+    """Given a Mx3 set of lattice vectors (a, b, c) and a Nx3 array of integers (u, v, w), generate N (x, y, z)
+    lattice sites according to
+
+        u*a + v*b + w*c
+
+    While this seems like something numpy can do in a one liner, I couldn't find a good way to make it readable so
+    I'm doing it this way. Probably you can do it with numpy.einsum().
+
+    Parameters
+    ----------
+    vecs : np.ndarray
+        Lattice vectors of shape Mx3
+    uvw : np.ndarray
+        Array of shape Nx3 containing lattice vector multiplicative factors
+
+    Returns
+    -------
+    np.ndarray
+        Nx3 array of (x, y, z) locations of each lattice site.
+    """
+
+    return np.outer(uvw[:, 0], vecs[0]) + np.outer(uvw[:, 1], vecs[1]) + np.outer(uvw[:, 2], vecs[2])

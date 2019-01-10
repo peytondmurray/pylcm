@@ -105,7 +105,7 @@ class Grain:
 
         """
 
-        relative_loc = self.center/size
+        # relative_loc = self.center/size
 
         _atoms = np.empty((n_atoms_generated, 3), dtype=float)      # Arrays to store atoms locations and element names
         _elements = np.empty((n_atoms_generated, 1), dtype=str)
@@ -159,45 +159,7 @@ class Polycrystal:
 
         return grains
 
-    # def generate_lattice(self, ig: int):
-    #     """Generate a lattice centered on self.grain_centers[ig], using the grain_bases generated before.
-
-    #     Parameters
-    #     ----------
-    #     ig : int
-    #         grain index
-
-    #     """
-
-    #     relative_loc = self.grains[ig].center/self.config.size          # Relative location in sim box [0, 1]
-
-    #     # Number of unit cells span simulation box
-    #     n_uc_span = util.n_uc_fill(self.config.size,
-    #                                self.grains[ig].rotated_lattice_vectors,
-    #                                kind='project')
-    #     n_uc = (relative_loc*n_uc_span).astype(int)                     # Location of grain in number of unit cells
-
-    #     _lattice = Lattice(n_atoms=np.prod(n_uc_span)*len(self.grains[ig].basis))
-
-    #     ia = 0  # Atom count
-    #     for i in range(-n_uc[0], n_uc_span[0] - n_uc[0]):
-    #         for j in range(-n_uc[1], n_uc_span[1] - n_uc[1]):
-    #             for k in range(-n_uc[2], n_uc_span[2] - n_uc[2]):
-    #                 for el, vec in self.grains[ig].basis.items():
-    #                     _lattice[ia] = (self.grains[ig].center+np.array([i, j, k])*self.grains[ig].lattice_vectors+vec,
-    #                                     el)
-    #                     ia += 1
-
-    #     _lattice = self._voronoi_decimate(ig, _lattice)
-
-    #     if self.lattice is not None:
-    #         self.lattice = self.lattice + _lattice
-    #     else:
-    #         self.lattice = _lattice
-
-    #     return
-
-    # def _voronoi_decimate(self, ig: int, lattice: Lattice) -> Lattice:
+    def _voronoi_decimate(self, ig: int, lattice: Lattice) -> Lattice:
         """Given a grain index and input Lattice instance, this function checks which atoms in the lattice
         actually belong to the grain centered at self.grain_centers[ig]. It does this by voronoi tesselation; any
         atoms which are closer to a grain center other than self.grain_centers[ig] are not returned.
@@ -224,7 +186,6 @@ class Polycrystal:
                 valid_lattice.add_arrays(*lattice[i])
 
         return valid_lattice
-
 
     def generate_lattice(self, ig: int):
 
@@ -281,7 +242,6 @@ class Polycrystal:
         for i in range(self.config.ngrains):
             a[i] = self.grains[i].angle
         return a
-
 
     def __repr__(self):
         print(str(self))
