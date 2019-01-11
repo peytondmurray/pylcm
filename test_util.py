@@ -25,7 +25,9 @@ def test_rotate_rodrigues_vector1d():
 
 
 def test_fill_locations(show=False):
-    vecs = np.array([[1, 0, 0], [-0.5, 0.5*np.sqrt(3), 0], [0, 0, 1]])
+    # vecs = np.array([[1, 0, 0], [-0.5, 0.5*np.sqrt(3), 0], [0, 0, 1]])
+    # vecs = np.array([[1, 0, 0], [0, 0.5, 0], [0, 0, 1]])
+    vecs = np.array([[0.5, 0.5, 0], [-0.5, 0.5, 0], [0, 0, 1]])
     size = np.array([10, 10, 1])
     indices = util.fill_locations(vecs, size)
     locations = util.lattice_from_uvw(vecs, indices)
